@@ -4,22 +4,13 @@ package fun.riding4.transport.controller;
 import fun.riding4.transport.model.TransportFileList;
 import fun.riding4.transport.service.TransportService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
-import org.springframework.stereotype.Controller;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-/**
- * @Author hym
- * @Date 2023-04-12 22:07
- * @Version 1.0
- * @Description
- */
 @RestController
 @RequestMapping("/api")
 public class TransportController {
@@ -37,9 +28,8 @@ public class TransportController {
         return transportService.getFiles(code);
     }
 
-    @GetMapping("/test")
-    public String download() {
-//        return Mono.just("download");
-        return "download";
+    @GetMapping("/files/download/{objectId}")
+    public Mono<Void> downloadFile(@PathVariable String objectId, ServerHttpResponse response) {
+        return transportService.downloadFile(response, objectId);
     }
 }
