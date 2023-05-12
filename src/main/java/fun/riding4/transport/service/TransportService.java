@@ -1,5 +1,6 @@
 package fun.riding4.transport.service;
 
+import fun.riding4.transport.config.TaskProperties;
 import fun.riding4.transport.config.exception.ErrorCode;
 import fun.riding4.transport.config.exception.ServiceException;
 import fun.riding4.transport.model.TransportFile;
@@ -14,10 +15,12 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.Random;
 
 @Service
@@ -25,13 +28,17 @@ import java.util.Random;
 public class TransportService {
     private final ReactiveGridFsTemplate gridFsTemplate;
     private final TransportFileListRepository transportFileListRepository;
+    private final TaskProperties taskProperties;
+    private final TaskScheduler taskScheduler;
 
     private static final Random RANDOM = new Random();
     private static final String CHARSET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
-    public TransportService(ReactiveGridFsTemplate gridFsTemplate, TransportFileListRepository transportFileListRepository) {
+    public TransportService(ReactiveGridFsTemplate gridFsTemplate, TransportFileListRepository transportFileListRepository, TaskProperties taskProperties, TaskScheduler taskScheduler) {
         this.gridFsTemplate = gridFsTemplate;
         this.transportFileListRepository = transportFileListRepository;
+        this.taskProperties = taskProperties;
+        this.taskScheduler = taskScheduler;
     }
 
     public Mono<TransportFileList> upload(Flux<FilePart> fileParts) {
@@ -46,6 +53,14 @@ public class TransportService {
                         .files(transportFiles)
                         .build())
                 .flatMap(transportFileListRepository::save)
+                .doOnNext(transportFileList -> taskScheduler.schedule(() -> {
+                    log.warn("delete file by code: {}, files: {}", transportFileList.getCode(), transportFileList.getFiles());
+                    transportFileList.getFiles().forEach(
+                            transportFile -> gridFsTemplate.delete(Query.query(Criteria.where("_id").is(new ObjectId(transportFile.getObjectId()))))
+                                    .subscribe()
+                    );
+                    transportFileListRepository.deleteById(transportFileList.getCode()).subscribe();
+                }, Instant.now().plusSeconds(taskProperties.getExpireAfterSeconds())))
                 .doOnError(e -> log.error("upload error", e));
     }
 
@@ -79,4 +94,5 @@ public class TransportService {
                 .onErrorMap(IllegalArgumentException.class, e -> ServiceException.from(ErrorCode.INVALID_PARAMETER))
                 .then();
     }
+
 }

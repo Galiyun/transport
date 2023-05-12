@@ -1,9 +1,15 @@
 spring:
-  servlet:
-    multipart:
-      max-file-size: 5MB
   data:
     mongodb:
       host: localhost
       port: 27017
       database: transport
+  task:
+    scheduling:
+      pool:
+        size: 1
+app:
+  task:
+    expire_after_seconds: 8
+server:
+  port: 8888
